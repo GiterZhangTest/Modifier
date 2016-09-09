@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.Data;
 using System.Drawing;
+using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -56,12 +57,30 @@ namespace Modifier
     public static class SelectFileBox
     {
         private static SelectFileForm frm;
-        public static string SelectFile(string[] files)
-        {
-            frm = new SelectFileForm(files);
-            frm.ShowDialog();
-            string file = frm.SelectedFile;
-            return file;
+        public static string SelectFile(string startupPath, string searchPattern, SearchOption searchOption)
+        {            
+            string[] files = System.IO.Directory.GetFiles(startupPath, searchPattern, searchOption);
+            if (files .Length > 0)
+            {
+                if (files.Length == 1)
+                {
+                    return files[0];
+                }
+                else
+                {
+                    frm = new SelectFileForm(files);
+
+                    frm.ShowDialog();
+                    string file = frm.SelectedFile;
+                    return file;
+                }
+            }
+            else
+            {
+                return null;
+            }
+            
+            
         }
     }
 }

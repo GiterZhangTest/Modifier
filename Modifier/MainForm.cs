@@ -18,7 +18,7 @@ namespace Modifier
         const int WFlag_Free = 1;
 
         private ModifierConfig modifierConfig;
-        private Version version;
+        private Version version;       
 
         public int PageIndex
         {
@@ -36,7 +36,7 @@ namespace Modifier
 
         private void MainForm_Load(object sender, EventArgs e)
         {
-            string fileName = SelectFile();
+            string fileName = SelectFileBox.SelectFile(Application.StartupPath,"*.msf", SearchOption.TopDirectoryOnly);
             if (fileName != null)
             {
                 if (LoadFile(fileName))//读取文件初始化modifier
@@ -68,23 +68,42 @@ namespace Modifier
                 moduleStausLabel.Text = modifierConfig.ProcessName + "未运行！";
             }
 
-            this.Text += " - For " + modifierConfig.ProcessName;
+            this.Text += " - For " + modifierConfig.GameName;
 
-            currentStatusStrip.Text = "当前状态：正在加载";
+            
             versionLabel.Text = "版本号：" + Application.ProductVersion;
+            currentStatusStrip.Text = "当前状态：正在加载";
+
+            //开始监视进程
+            backgroundWorker.RunWorkerAsync();
+            currentStatusStrip.Text = "当前状态：等待程序运行";
 
         }
 
         private void Event_ProcessRan()
         {
-            //string fileName = APIHelper.GetProcessModule(modifierConfig.ProcessName, modifierConfig.ModuleName).FileName;
-            //string md5 = Program.GetMD5HashFromFile(fileName);
+            string fileName = APIHelper.GetProcessModule(modifierConfig.ProcessName, modifierConfig.ModuleName).FileName;
+            string md5 = Program.GetMD5HashFromFile(fileName);
+           
 
-            string md5 = "md5Test";
+            //初始化进程信息
+            try
+            {
+                ModifierConfigEx.ProcessInfo.Pid = APIHelper.GetProcessID(modifierConfig.ProcessName);
+                ModifierConfigEx.ProcessInfo.ModuleAddress = APIHelper.GetModuleAddr(modifierConfig.ProcessName, modifierConfig.ModuleName);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(ex.Message);
+                Close();
+            }
+
             //匹配版本
             if (AdaptVersion(md5))
             {
+                //初始化页面
                 LoadPages(version.Pages);
+                currentStatusStrip.Text = "当前状态：加载完毕";
             }
             else
             {
@@ -94,27 +113,6 @@ namespace Modifier
             }
 
         }
-
-        private string SelectFile()
-        {
-            string[] files = System.IO.Directory.GetFiles(Application.StartupPath, "*.xml", SearchOption.TopDirectoryOnly);
-            if (files != null)
-            {
-                if (files.Length == 1)
-                {
-                    return files[0];
-                }
-                else
-                {
-                    return SelectFileBox.SelectFile(files);
-                }
-            }
-            else
-            {
-                return null;
-            }
-            
-        }   //寻找文件
 
         private bool LoadFile(string fileName)
         {
@@ -144,7 +142,7 @@ namespace Modifier
         {
             foreach (var item in modifierConfig.Versions)
             {
-                if (item.FileMd5 == md5)
+                if (item.FileMd5.ToLower() == md5.ToLower())
                 {
                     version = item;
 
@@ -166,8 +164,11 @@ namespace Modifier
 
         private void LoadItems(List<DataGridViewRow> rows)
         {
-            gridView.Rows.Clear();
-            gridView.Rows.AddRange(rows.ToArray());
+            if (rows != null)
+            {
+                gridView.Rows.Clear();
+                gridView.Rows.AddRange(rows.ToArray());
+            }          
         }
 
         private List<DataGridViewRow> ReadItemsValue(List<FunctionItem> functionItems, bool isReload)
@@ -179,6 +180,7 @@ namespace Modifier
                 DataGridViewTextBoxCell name = new DataGridViewTextBoxCell();                
                 DataGridViewTextBoxCell errorText = new DataGridViewTextBoxCell();
                 DataGridViewCell value;
+
                 object itemValue = -1;//初始值                
 
                 name.Value = item.Name;
@@ -200,6 +202,7 @@ namespace Modifier
 
                         value.Value = itemValue;
                         value.ReadOnly = item.ReadOnly;
+
                         if (value.ReadOnly)
                         {
                             value.Style.BackColor = Color.WhiteSmoke;
@@ -209,7 +212,6 @@ namespace Modifier
                         value = new DataGridViewComboBoxCell();
                         row.Cells.AddRange(new DataGridViewCell[] { name, value, errorText });
 
-                        value.ReadOnly = item.ReadOnly;
                         ((DataGridViewComboBoxCell)value).Items.AddRange(item.ValueStringMap.GetValueList().ToArray());
                         ((DataGridViewComboBoxCell)value).Value = item.ValueStringMap.GetValue((int)itemValue);
                         break;
@@ -218,38 +220,18 @@ namespace Modifier
                 
             }
             return rows;
-        }
-
-
-        //测试代码
-        private void button1_Click(object sender, EventArgs e)
-        {
-            Event_ProcessRan();           
-        }
-
-        private void backgroundWorker_DoWork(object sender, DoWorkEventArgs e)
-        {
-            //等待线程运行
-            while (!Program.IsProcessRunning(modifierConfig.ProcessName))
-            {
-                System.Threading.Thread.Sleep(1000);
-            }
-        }
-
-        private void backgroundWorker_RunWorkerCompleted(object sender, RunWorkerCompletedEventArgs e)
-        {
-            Event_ProcessRan();
-        }
+        }   
 
         private void tabControl_Selected(object sender, TabControlEventArgs e)
         {
-            int pageIndex = PageIndex;
-            if (pageIndex > -1)
+            if (e.TabPageIndex > 0)
             {
                 tabControl.SelectedTab.Controls.Add(gridView);
 
-                WFlag = WFlag_Busy;
-                LoadItems(ReadItemsValue(version.Pages[pageIndex].Items, true));
+                WFlag = WFlag_Busy;               
+                backgroundWorker1.RunWorkerAsync(new FunctionBag { Items = version.Pages[PageIndex].Items, IsReload = false});
+
+                WaitBox.Wait();//对话框中断等待
                 WFlag = WFlag_Free;
             }
         }
@@ -323,5 +305,55 @@ namespace Modifier
                 }
             }
         }
+
+        //监视线程
+        private void backgroundWorker_DoWork(object sender, DoWorkEventArgs e)
+        {
+            //等待线程运行
+            while (!Program.IsProcessRunning(modifierConfig.ProcessName))
+            {
+                System.Threading.Thread.Sleep(1000);
+            }
+        }
+
+        private void backgroundWorker_RunWorkerCompleted(object sender, RunWorkerCompletedEventArgs e)
+        {
+            Event_ProcessRan();
+        }
+
+
+        //异步读取内存
+        private void backgroundWorker1_DoWork(object sender, DoWorkEventArgs e)
+        {
+            FunctionBag bag = (FunctionBag)(e.Argument);
+            bag.Rows = ReadItemsValue(bag.Items,bag.IsReload);
+            e.Result = bag.Rows;
+        }
+
+        private void backgroundWorker1_RunWorkerCompleted(object sender, RunWorkerCompletedEventArgs e)
+        {
+            //异步读取完读取行
+            LoadItems((List<DataGridViewRow>)e.Result);
+            //关闭读取框
+            WaitBox.Close();
+        }
+
+        private void 刷新ToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            WFlag = WFlag_Busy;
+            backgroundWorker1.RunWorkerAsync(new FunctionBag { Items = version.Pages[PageIndex].Items, IsReload = true });
+
+            WaitBox.Wait();//对话框中断等待
+            WFlag = WFlag_Free;
+        }
+    }
+
+    class FunctionBag
+    {
+        //用于异步交换数据
+        public List<DataGridViewRow> Rows { get; set; }
+        public List<FunctionItem> Items { get; set; }
+
+        public bool IsReload { get; set; }
     }
 }

@@ -110,7 +110,6 @@ namespace Modifier
                 value_temp[instance.GetHashCode()] = -1;
                 throw ex;
             }
-
             return value_temp[instance.GetHashCode()];
         }
         public static void Write(this FunctionItem instance, string value)
