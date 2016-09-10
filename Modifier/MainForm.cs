@@ -70,7 +70,6 @@ namespace Modifier
 
             this.Text += " - For " + modifierConfig.GameName;
 
-            
             versionLabel.Text = "版本号：" + Application.ProductVersion;
             currentStatusStrip.Text = "当前状态：正在加载";
 
@@ -286,7 +285,6 @@ namespace Modifier
                     else if (item.FormStyle == "下拉列表")
                     {
                         string str = currentRow.Cells["value"].Value.ToString();
-                        str = "";
                         int key = item.ValueStringMap.GetKey(str);
                         try
                         {
@@ -299,7 +297,7 @@ namespace Modifier
                         {
                             currentRow.Cells["errorText"].Value = ex.Message;
                         }
-                        currentRow.Cells["value"].Value = "";
+                        currentRow.Cells["value"].Value = item.ValueStringMap.GetValue((int)item.Read(false));
                     }           
                     WFlag = WFlag_Free;
                 }

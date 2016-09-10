@@ -70,6 +70,7 @@ namespace Modifier
                 if (unit.Key == key.ToString())
                 {
                     value = unit.Value;
+                    break;
                 }
             }
             return value;

@@ -38,14 +38,8 @@ namespace Modifier
         private static Dictionary<int, object> value_temp = new Dictionary<int, object>();
 
         public static Type GetValueType(this FunctionItem instance)
-        {
-            try
-            {
-                return Type.GetType(instance.ValueType);
-            }
-            catch { }
-
-            return null;
+        { 
+            return Type.GetType(instance.ValueType);
         }
 
         public static object Read(this FunctionItem instance, bool isReload = false)
@@ -60,8 +54,7 @@ namespace Modifier
                 if (value_temp[instance.GetHashCode()] != null)
                 {
                     return value_temp[instance.GetHashCode()];
-                }
-                
+                }             
             }
             //读内存
             try
